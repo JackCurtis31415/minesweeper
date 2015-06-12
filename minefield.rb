@@ -1,5 +1,3 @@
-require 'pry'
-require 'pry-nav'
 
 class Minefield
   attr_reader :row_count, :column_count
@@ -16,6 +14,8 @@ class Minefield
     @cleared = Array.new(column_count) {Array.new(row_count, false)}
     @mined = Array.new(column_count) {Array.new(row_count, false)}
     @n_adjacent = Array.new(column_count) {Array.new(row_count, 0)}
+
+    @pending_adjacents = []
     
     # you can access this array using array[x][y]    
 
@@ -23,9 +23,11 @@ class Minefield
 
     compose_n_adjacent
 
+=begin    
     mined_string = @mined.to_s
     mined_string.gsub!(/],/,"],\n")
-    mined_string.gsub!(/true/, " true")
+    mined_string.gsub!(/true/, "1")
+    mined_string.gsub!(/false/, "0")
 
     n_adjacent_string = @n_adjacent.to_s
     n_adjacent_string.gsub!(/],/,"],\n")
@@ -36,12 +38,8 @@ class Minefield
     puts " @n_adjacent = "
     puts " #{n_adjacent_string}"
     puts ""
-
-#    row = 0
-#    col = 0
-#    binding.pry
-#    clear_recursive(row, col)
-#    
+=end
+    
   end
 
   def n_mines(i, j)
@@ -50,7 +48,7 @@ class Minefield
       sum = 0
       
       cells.each do |coord|
-        sum += 1 if @mined[coord[0]][coord[1]] == true
+        sum += 1 if @mined [coord[0]][coord[1]] == true
       end
 
       return sum
@@ -106,8 +104,6 @@ class Minefield
 
   end
 
-  
-  # Return true if the cell been uncovered, false otherwise.
   def cell_cleared?(row, col)
     @cleared[row][col]
   end
@@ -159,28 +155,56 @@ class Minefield
 #     Perform Flood-fill (one step to the south of node, target-color, replacement-color).
 #  5. Return.
 #                         
-# Note:  N,S,E,W should work in algo, don't need the corners
 #  
 
-  # plan:    do clear as a "just follow uncleared cells" method - recursive
-  #          add cells to an array of "cells to eventually clear adjacents" that is uniqueified
-  #   clear(row,col)  calls clear_recursive(row,col), which returns "pending_adjacents"
-  #                    clear_recursive(row,col) calls itself
-  #          - then clear() calls clear_adjacent_queue
-  #  should gitify this
-  
   def clear_adjacent_cells(row, col)
     
     cells = adjacent_cells(row, col)
-       #puts "Debug: cell: #{row}, #{col} is clearing adjacent_cells: #{cells.to_s}"
+    #puts "Debug: cell: #{row}, #{col} is clearing adjacent_cells: #{cells.to_s}"
  
-       cells.each do |coord|
-         @cleared[coord[0]][coord[1]] = true
-       end
+    cells.each do |coord|
+
+   #   puts "Debug: cell: #{coord[0]}, #{coord[1]} adjacent to #{row}, #{col} is being examined"
+      
+      if @mined[coord[0]][coord[1]] == false
+
+        #puts "Debug: cell: #{coord[0]}, #{coord[1]} is being cleared"
+
+        @cleared[coord[0]][coord[1]] = true  
+      end
+    end
+    
   end
-  
+
   def clear(row, col)
 
+    @pending_adjacents = []
+
+    # if first cell is non-zero, it is a boundary, do not do recursive clear
+    if( @n_adjacent[row][col] != 0)
+      @cleared[row][col] = true
+      @pending_adjacents << [row, col]
+    else      
+      clear_recursive(row,col)
+    end
+
+    clear_adjacent_queue(@pending_adjacents)
+    
+  end
+
+  def clear_adjacent_queue(pending_adjacents)
+    if pending_adjacents == nil
+      return
+    else
+      pending_adjacents.each do |cell|
+        clear_adjacent_cells(cell[0], cell[1])
+      end
+    end
+  end
+  
+  def clear_recursive(row, col)
+
+        
     if( @n_adjacent[row][col] == 0)  # target this to clear
 
       #puts "Debug: cell: #{row}, #{col} post target this to clear"
@@ -192,28 +216,27 @@ class Minefield
 
       @cleared[row][col] = true
 
+      @pending_adjacents << [row, col]
+      @pending_adjacents.uniq!          # tune this, might be slow
+      
       i_limit = @cleared[0].length - 1
       j_limit = @cleared.length - 1
       i = row
       j = col
 
+      clear_recursive(i - 1, j + 1) unless ( i - 1 < 0) || (j + 1 > j_limit) 
+      clear_recursive(i, j - 1)  unless  ( j - 1 < 0)  # West
+      clear_recursive(i, j + 1)  unless (j + 1 > j_limit)  # East
+      clear_recursive(i + 1, j - 1) if ( i + 1 <= i_limit) && ( j - 1 >= 0)  
+      clear_recursive(i-1, j-1)  unless ( i - 1 < 0) || ( j -1 < 0)          
+      clear_recursive(i-1, j)     unless ( i - 1 < 0)  # North
+      clear_recursive(i + 1, j ) if ( i + 1 <= i_limit)  #South
+      clear_recursive( i + 1, j + 1)     if  ( i + 1 <= i_limit) && (j + 1 <= j_limit)
 
-      clear(i - 1, j + 1) unless ( i - 1 < 0) || (j + 1 > j_limit)  # exp #4
-      clear(i, j - 1)  unless  ( j - 1 < 0)  # West
-      clear(i, j + 1)  unless (j + 1 > j_limit)  # East
-      clear(i + 1, j - 1) if ( i + 1 <= i_limit) && ( j - 1 >= 0)  # exp #4
-      clear(i-1, j-1)  unless ( i - 1 < 0) || ( j -1 < 0)          # exp #4
-      clear(i-1, j)     unless ( i - 1 < 0)  # North
-      clear(i + 1, j ) if ( i + 1 <= i_limit)  #South
-      clear( i + 1, j + 1)     if  ( i + 1 <= i_limit) && (j + 1 <= j_limit)   # exp #4
-
-      clear_adjacent_cells(row, col)
- 
       return
 
-    else
-      return
     end
+
   end
   
     
